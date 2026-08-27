@@ -1,0 +1,38 @@
+{
+  "domain": "rachio",
+  "name": "Rachio",
+  "after_dependencies": ["cloud"],
+  "codeowners": ["@jessfraz"],
+  "config_flow": true,
+  "dependencies": ["http"],
+  "dhcp": [
+    {
+      "hostname": "rachio-*",
+      "macaddress": "009D6B*"
+    },
+    {
+      "hostname": "rachio-*",
+      "macaddress": "F0038C*"
+    },
+    {
+      "hostname": "rachio-*",
+      "macaddress": "74C63B*"
+    }
+  ],
+  "documentation": "https://github.com/jessfraz/home-assistant-rachio",
+  "homekit": {
+    "models": ["Rachio"]
+  },
+  "integration_type": "hub",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/jessfraz/home-assistant-rachio/issues",
+  "loggers": ["rachiopy"],
+  "requirements": ["RachioPy==1.1.0"],
+  "version": "0.1.0",
+  "zeroconf": [
+    {
+      "name": "rachio*",
+      "type": "_http._tcp.local."
+    }
+  ]
+}
