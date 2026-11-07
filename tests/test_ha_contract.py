@@ -1,11 +1,12 @@
 """Home Assistant 2026.8.3 integration contract tests."""
 
-from unittest.mock import AsyncMock, patch
+import logging
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import voluptuous as vol
 from homeassistant.components.valve import DOMAIN as VALVE_DOMAIN
-from homeassistant.config_entries import SOURCE_REAUTH
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     EVENT_HOMEASSISTANT_STOP,
@@ -18,6 +19,12 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.loader import async_get_integration
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from requests.exceptions import (
+    ConnectionError,
+    ConnectTimeout,
+    ReadTimeout,
+    RequestException,
+)
 
 VALVE_ID = "valve-one"
 WEBHOOK_URL = "https://example.test/api/webhook/existing-webhook-id"
@@ -45,6 +52,55 @@ async def _setup_entry(
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
         return register, unregister
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        ConnectionError("private connection diagnostic"),
+        ConnectTimeout("private connection diagnostic"),
+        ReadTimeout("private connection diagnostic"),
+    ],
+    ids=["connection-error", "connect-timeout", "read-timeout"],
+)
+async def test_setup_retries_transport_failure_and_recovers(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_rachio: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+    failure: RequestException,
+) -> None:
+    """Let HA retry transport failures without exposing their raw diagnostic."""
+    mock_config_entry.add_to_hass(hass)
+    component = await (
+        await async_get_integration(hass, "rachio")
+    ).async_get_component()
+    mock_rachio.person.info.side_effect = failure
+    with (
+        patch.object(
+            component,
+            "async_get_or_create_registered_webhook_id_and_url",
+            return_value=WEBHOOK_URL,
+        ),
+        patch.object(component, "async_register_webhook") as register,
+    ):
+        assert not await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
+        assert mock_config_entry.reason == "Could not connect to the Rachio API"
+        assert hass.states.get("valve.dog_water") is None
+        register.assert_not_called()
+        assert not any(
+            record.name == "custom_components.rachio"
+            and record.levelno >= logging.ERROR
+            for record in caplog.records
+        )
+
+        mock_rachio.person.info.side_effect = None
+        assert await hass.config_entries.async_reload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        assert mock_config_entry.state is ConfigEntryState.LOADED
+        assert hass.states.get("valve.dog_water").state == "closed"
+        register.assert_called_once()
 
 
 async def test_setup_preserves_ids_and_prefers_native_valve(

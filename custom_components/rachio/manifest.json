@@ -28,7 +28,7 @@
   "issue_tracker": "https://github.com/jessfraz/home-assistant-rachio/issues",
   "loggers": ["rachiopy"],
   "requirements": ["RachioPy==1.1.0"],
-  "version": "0.1.0",
+  "version": "0.1.1",
   "zeroconf": [
     {
       "name": "rachio*",

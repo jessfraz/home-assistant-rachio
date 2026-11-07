@@ -11,7 +11,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from rachiopy import Rachio
-from requests.exceptions import ConnectTimeout
+from requests.exceptions import ConnectionError, Timeout
 
 from .const import CONF_CLOUDHOOK_URL, CONF_MANUAL_RUN_MINS, DOMAIN
 from .device import (
@@ -163,9 +163,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: RachioConfigEntry) -> bo
     # Get the API user
     try:
         await person.async_setup(hass)
-    except ConnectTimeout as error:
-        _LOGGER.error("Could not reach the Rachio API: %s", error)
-        raise ConfigEntryNotReady from error
+    except (ConnectionError, Timeout) as error:
+        raise ConfigEntryNotReady("Could not connect to the Rachio API") from error
 
     # Check for Rachio controller devices
     if not person.controllers and not person.base_stations:
